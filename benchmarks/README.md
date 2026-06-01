@@ -26,3 +26,16 @@ Expected output table:
 | CPU |  |  |  |
 | Naive CUDA |  |  |  |
 | Tiled CUDA |  |  |  |
+
+## Consolidated Reporting
+
+Generate a single JSON and Markdown benchmark report with:
+
+```powershell
+py scripts\generate_benchmark_report.py
+```
+
+Artifacts:
+
+- `benchmarks/results/latest_report.json`
+- `benchmarks/results/latest_report.md`

@@ -1,0 +1,96 @@
+{
+  "environment": {
+    "python": "3.11.0",
+    "torch": "2.9.0+cpu",
+    "cuda_available": false,
+    "platform": "Windows-10-10.0.26200-SP0"
+  },
+  "kv_cache": {
+    "prompt": "Hello",
+    "sample_tokens": 8,
+    "repeats": 3,
+    "results": [
+      {
+        "method": "full_recompute",
+        "seconds": 0.025582266667091364,
+        "tokens_per_second": 312.7166214044308,
+        "sample": "Hello how are"
+      },
+      {
+        "method": "kv_cache",
+        "seconds": 0.02428133333281342,
+        "tokens_per_second": 329.47119873309936,
+        "sample": "Hello how are"
+      }
+    ]
+  },
+  "batching": {
+    "prompts": [
+      "Hello",
+      "Hello how",
+      "Hello there",
+      "Hello how are"
+    ],
+    "sample_tokens": 8,
+    "repeats": 3,
+    "results": [
+      {
+        "method": "serial_kv_cache",
+        "seconds": 0.1191765333339087,
+        "tokens_per_second": 268.50923671644676,
+        "samples": [
+          "Hello how are",
+          "Hello how are you",
+          "Hello there how are",
+          "Hello how are you.\nHe"
+        ]
+      },
+      {
+        "method": "batched_kv_cache",
+        "seconds": 0.21085143333281545,
+        "tokens_per_second": 151.76562707776358,
+        "steps": 32,
+        "samples": [
+          "Hello how are",
+          "Hello how are you",
+          "Hello there how are",
+          "Hello how are you.\nHe"
+        ]
+      }
+    ]
+  },
+  "quantization": {
+    "prompt": "Hello",
+    "sample_tokens": 8,
+    "repeats": 3,
+    "results": [
+      {
+        "type": "FP32",
+        "memory_mib": 0.265625,
+        "seconds": 0.032230266666980846,
+        "tokens_per_second": 248.21389418399733,
+        "loss": 0.20303726196289062,
+        "sample": "Hello how are",
+        "loss_delta": 0.0
+      },
+      {
+        "type": "FP16",
+        "memory_mib": 0.1328125,
+        "seconds": 0.04731840000022203,
+        "tokens_per_second": 169.0674240879333,
+        "loss": 0.2030017077922821,
+        "sample": "Hello how are",
+        "loss_delta": -3.555417060852051e-05
+      },
+      {
+        "type": "INT8",
+        "memory_mib": 0.07085418701171875,
+        "seconds": 0.04174456666684515,
+        "tokens_per_second": 191.64170666439932,
+        "loss": 0.2022889256477356,
+        "sample": "Hello how are",
+        "loss_delta": -0.0007483363151550293
+      }
+    ]
+  }
+}

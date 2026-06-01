@@ -33,6 +33,7 @@ Implemented now:
 - Phase 4: FP32, FP16, and INT8 comparison utilities
 - Phase 5: first-pass continuous batching benchmark and API surface
 - Inference server: FastAPI endpoints for generation, streaming, chat, batching, model info, benchmarking, and dashboard metrics
+- Reporting layer: auto-generated JSON and Markdown benchmark summaries
 
 Current machine limitation:
 
@@ -118,6 +119,14 @@ Example benchmark result from this machine:
 - `POST /chat`
 - `POST /benchmark`
 - `POST /batch_generate`
+- `POST /benchmark_batching`
+
+### Reporting
+
+- consolidated JSON benchmark export
+- consolidated Markdown benchmark report
+- benchmark artifacts written under `benchmarks/results/`
+- latest local benchmark snapshot: [latest_report.md](C:/Users/vaibh/Documents/Codex/2026-05-30/lets-do-a-huge-project/benchmarks/results/latest_report.md)
 
 ## Quick Start
 
@@ -157,6 +166,12 @@ Benchmark batching:
 py scripts/benchmark_batching.py --sample-tokens 16 --repeats 5
 ```
 
+Generate a consolidated benchmark report:
+
+```bash
+py scripts/generate_benchmark_report.py
+```
+
 Run the FastAPI server:
 
 ```bash
@@ -186,9 +201,9 @@ Priority order:
 
 1. Run CUDA matmul benchmarks on a GPU machine and record real results.
 2. Extend handwritten CUDA to softmax and attention.
-3. Combine continuous batching with per-request KV caches.
-4. Add richer benchmark visualizations and persisted metrics.
-5. Expand quantization and evaluation beyond the toy setup.
+3. Add richer benchmark visualizations and persisted metrics.
+4. Expand quantization and evaluation beyond the toy setup.
+5. Run the CUDA benchmark suite on a real GPU machine and add external comparisons.
 
 ## Documentation
 

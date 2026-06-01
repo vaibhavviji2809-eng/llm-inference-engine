@@ -204,6 +204,69 @@ class TransformerRuntime:
                 }
                 for result in report["results"]
             ],
+            "mode": report["mode"],
+        }
+
+    def benchmark_batching(
+        self,
+        prompts: list[str],
+        max_new_tokens: int,
+        repeats: int,
+    ) -> dict:
+        prompt_ids = [self.encode_prompt(prompt) for prompt in prompts]
+
+        serial_start = time.perf_counter()
+        serial_outputs = []
+        for _ in range(repeats):
+            serial_outputs = [
+                self.model.generate_with_kv_cache(
+                    prompt_ids_item,
+                    max_new_tokens=max_new_tokens,
+                    temperature=0.0,
+                )
+                for prompt_ids_item in prompt_ids
+            ]
+        serial_elapsed = (time.perf_counter() - serial_start) / repeats
+
+        batched_report = None
+        batch_start = time.perf_counter()
+        for _ in range(repeats):
+            requests = [
+                BatchGenerateRequest(
+                    request_id=f"req-{index}",
+                    prompt_ids=prompt_ids_item,
+                    max_new_tokens=max_new_tokens,
+                    temperature=0.0,
+                )
+                for index, prompt_ids_item in enumerate(prompt_ids)
+            ]
+            batched_report = self.batcher.generate(requests)
+        batched_elapsed = (time.perf_counter() - batch_start) / repeats
+
+        total_tokens = len(prompts) * max_new_tokens
+        assert batched_report is not None
+        return {
+            "prompts": prompts,
+            "sample_tokens": max_new_tokens,
+            "repeats": repeats,
+            "results": [
+                {
+                    "method": "serial_kv_cache",
+                    "seconds": serial_elapsed,
+                    "tokens_per_second": total_tokens / serial_elapsed,
+                    "samples": [self.decode_tokens(output) for output in serial_outputs],
+                },
+                {
+                    "method": batched_report["mode"],
+                    "seconds": batched_elapsed,
+                    "tokens_per_second": total_tokens / batched_elapsed,
+                    "steps": batched_report["steps"],
+                    "samples": [
+                        self.decode_tokens(result["generated"])
+                        for result in batched_report["results"]
+                    ],
+                },
+            ],
         }
 
 

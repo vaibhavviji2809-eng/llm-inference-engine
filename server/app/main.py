@@ -33,6 +33,12 @@ class BatchGenerateRequest(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 
 
+class BatchBenchmarkRequest(BaseModel):
+    prompts: list[str]
+    sample_tokens: int = Field(default=16, ge=1, le=128)
+    repeats: int = Field(default=5, ge=1, le=100)
+
+
 app = FastAPI(title="LLM Inference Engine")
 
 
@@ -145,6 +151,28 @@ def batch_generate(request: BatchGenerateRequest) -> dict:
             temperature=request.temperature,
         )
         metrics_store.record_batch_run(result)
+        return result
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/benchmark_batching")
+def benchmark_batching(request: BatchBenchmarkRequest) -> dict:
+    if not request.prompts:
+        raise HTTPException(status_code=400, detail="prompts must not be empty.")
+    if not DEFAULT_CHECKPOINT.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Model checkpoint not found. Run scripts/train_tiny_transformer.py first.",
+        )
+    runtime = get_runtime()
+    try:
+        result = runtime.benchmark_batching(
+            prompts=request.prompts,
+            max_new_tokens=request.sample_tokens,
+            repeats=request.repeats,
+        )
+        metrics_store.record_benchmark(result)
         return result
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

@@ -21,5 +21,6 @@ Current status:
 - Phase 2 now includes handwritten naive and tiled CUDA matmul kernels plus a benchmark harness.
 - Phase 4 now includes FP32, FP16, and INT8 comparison utilities for memory, speed, and loss.
 - Phase 5 now includes a first-pass continuous batching scheduler, benchmark script, and batch API endpoint.
+- The batching path now reuses per-request KV cache state by grouping decode steps with matching cache lengths.
 - The environment on this machine is CPU-only, so CUDA phases are scaffolded but not executable here yet.
 - The FastAPI server can now load the checkpoint, generate text, stream output, serve chat-style prompts, batch prompts together, expose benchmark results, and render a lightweight dashboard.
