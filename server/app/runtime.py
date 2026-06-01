@@ -8,6 +8,7 @@ import time
 
 import torch
 
+from batching import BatchGenerateRequest, ContinuousBatcher
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -45,6 +46,7 @@ class TransformerRuntime:
         self.model.load_state_dict(payload["state_dict"])
         self.model.eval()
         self.device = "cpu"
+        self.batcher = ContinuousBatcher(self.model)
 
     def model_card(self) -> dict:
         return {
@@ -99,6 +101,31 @@ class TransformerRuntime:
             "tokens_per_second": max_new_tokens / elapsed if elapsed > 0 else None,
         }
 
+    def stream_text(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+        temperature: float,
+        use_cache: bool,
+    ) -> list[str]:
+        prompt_ids = self.encode_prompt(prompt)
+        if use_cache:
+            generated = self.model.generate_with_kv_cache(
+                prompt_ids,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+            )
+        else:
+            generated = self.model.generate(
+                prompt_ids,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+            )
+        full_text = self.decode_tokens(generated)
+        prompt_text = self.decode_tokens(prompt_ids)
+        completion = full_text[len(prompt_text) :]
+        return [character for character in completion]
+
     def benchmark(
         self,
         prompt: str,
@@ -146,6 +173,36 @@ class TransformerRuntime:
                     "tokens_per_second": max_new_tokens / cached_seconds,
                     "sample": self.decode_tokens(cached_output),
                 },
+            ],
+        }
+
+    def batch_generate_text(
+        self,
+        prompts: list[str],
+        max_new_tokens: int,
+        temperature: float,
+    ) -> dict:
+        requests = [
+            BatchGenerateRequest(
+                request_id=f"req-{index}",
+                prompt_ids=self.encode_prompt(prompt),
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+            )
+            for index, prompt in enumerate(prompts)
+        ]
+        report = self.batcher.generate(requests)
+        return {
+            "request_count": report["request_count"],
+            "steps": report["steps"],
+            "latency_seconds": report["latency_seconds"],
+            "tokens_per_second": report["tokens_per_second"],
+            "results": [
+                {
+                    "request_id": result["request_id"],
+                    "completion": self.decode_tokens(result["generated"]),
+                }
+                for result in report["results"]
             ],
         }
 

@@ -31,7 +31,8 @@ Implemented now:
 - Phase 2: naive and tiled CUDA matmul kernels plus benchmark harness
 - Phase 3: KV cache with incremental decoding and throughput benchmark
 - Phase 4: FP32, FP16, and INT8 comparison utilities
-- Inference server: FastAPI endpoints for generation, chat, model info, and benchmarking
+- Phase 5: first-pass continuous batching benchmark and API surface
+- Inference server: FastAPI endpoints for generation, streaming, chat, batching, model info, benchmarking, and dashboard metrics
 
 Current machine limitation:
 
@@ -110,9 +111,13 @@ Example benchmark result from this machine:
 
 - `GET /health`
 - `GET /model`
+- `GET /metrics/summary`
+- `GET /dashboard`
 - `POST /generate`
+- `POST /stream`
 - `POST /chat`
 - `POST /benchmark`
+- `POST /batch_generate`
 
 ## Quick Start
 
@@ -146,6 +151,12 @@ Benchmark quantization:
 py scripts/benchmark_quantization.py --prompt Hello --sample-tokens 24 --repeats 10
 ```
 
+Benchmark batching:
+
+```bash
+py scripts/benchmark_batching.py --sample-tokens 16 --repeats 5
+```
+
 Run the FastAPI server:
 
 ```bash
@@ -165,6 +176,7 @@ curl -X POST http://127.0.0.1:8000/generate \
 - the toy tokenizer only supports characters seen in [data/tiny_corpus.txt](C:/Users/vaibh/Documents/Codex/2026-05-30/lets-do-a-huge-project/data/tiny_corpus.txt)
 - the current checkpoint is intentionally tiny and is meant for architecture experimentation, not model quality
 - CUDA benchmarking cannot be executed on this machine because `nvcc` and an NVIDIA runtime are not installed
+- the current batching implementation is CPU-first and does not yet combine batching with KV-cached decode state
 
 ## Roadmap
 
@@ -174,8 +186,8 @@ Priority order:
 
 1. Run CUDA matmul benchmarks on a GPU machine and record real results.
 2. Extend handwritten CUDA to softmax and attention.
-3. Build continuous batching over cached decode streams.
-4. Add benchmark dashboards and system metrics.
+3. Combine continuous batching with per-request KV caches.
+4. Add richer benchmark visualizations and persisted metrics.
 5. Expand quantization and evaluation beyond the toy setup.
 
 ## Documentation

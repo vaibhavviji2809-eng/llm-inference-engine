@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from .dashboard import render_dashboard
+from .metrics import metrics_store
 from .runtime import DEFAULT_CHECKPOINT, get_runtime
 
 
@@ -22,6 +25,12 @@ class BenchmarkRequest(BaseModel):
     prompt: str
     sample_tokens: int = Field(default=24, ge=1, le=128)
     repeats: int = Field(default=10, ge=1, le=100)
+
+
+class BatchGenerateRequest(BaseModel):
+    prompts: list[str]
+    max_new_tokens: int = Field(default=16, ge=1, le=128)
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
 
 
 app = FastAPI(title="LLM Inference Engine")
@@ -57,12 +66,14 @@ def generate(request: GenerateRequest) -> dict:
         )
     runtime = get_runtime()
     try:
-        return runtime.generate_text(
+        result = runtime.generate_text(
             prompt=request.prompt,
             max_new_tokens=request.max_new_tokens,
             temperature=request.temperature,
             use_cache=request.use_kv_cache,
         )
+        metrics_store.record_request(result)
+        return result
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 
@@ -85,6 +96,7 @@ def chat(request: ChatRequest) -> dict:
             temperature=request.temperature,
             use_cache=request.use_kv_cache,
         )
+        metrics_store.record_request(result)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     return {
@@ -105,10 +117,79 @@ def benchmark(request: BenchmarkRequest) -> dict:
         )
     runtime = get_runtime()
     try:
-        return runtime.benchmark(
+        result = runtime.benchmark(
             prompt=request.prompt,
             max_new_tokens=request.sample_tokens,
             repeats=request.repeats,
         )
+        metrics_store.record_benchmark(result)
+        return result
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/batch_generate")
+def batch_generate(request: BatchGenerateRequest) -> dict:
+    if not request.prompts:
+        raise HTTPException(status_code=400, detail="prompts must not be empty.")
+    if not DEFAULT_CHECKPOINT.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Model checkpoint not found. Run scripts/train_tiny_transformer.py first.",
+        )
+    runtime = get_runtime()
+    try:
+        result = runtime.batch_generate_text(
+            prompts=request.prompts,
+            max_new_tokens=request.max_new_tokens,
+            temperature=request.temperature,
+        )
+        metrics_store.record_batch_run(result)
+        return result
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/stream")
+def stream(request: GenerateRequest) -> StreamingResponse:
+    if not DEFAULT_CHECKPOINT.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="Model checkpoint not found. Run scripts/train_tiny_transformer.py first.",
+        )
+    runtime = get_runtime()
+    try:
+        chunks = runtime.stream_text(
+            prompt=request.prompt,
+            max_new_tokens=request.max_new_tokens,
+            temperature=request.temperature,
+            use_cache=request.use_kv_cache,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+    async def event_stream():
+        for chunk in chunks:
+            yield f"data: {chunk}\\n\\n"
+        yield "data: [DONE]\\n\\n"
+
+    metrics_store.record_request(
+        {
+            "prompt": request.prompt,
+            "latency_seconds": None,
+            "tokens_per_second": None,
+            "use_kv_cache": request.use_kv_cache,
+            "streaming": True,
+        }
+    )
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/metrics/summary")
+def metrics_summary() -> dict:
+    return metrics_store.summary()
+
+
+@app.get("/dashboard")
+def dashboard():
+    return render_dashboard()
