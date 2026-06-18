@@ -9,7 +9,7 @@ from torch import nn
 from kv_cache import KVCache, LayerKVCache
 from .config import TransformerConfig
 from .modules import LayerNorm, Linear, PositionalEmbedding, TokenEmbedding, gelu, softmax
-from .attention import FlashAttention, NaiveAttention
+from .flash_attention import FlashAttention, NaiveAttention
 
 
 class MultiHeadSelfAttention(nn.Module):

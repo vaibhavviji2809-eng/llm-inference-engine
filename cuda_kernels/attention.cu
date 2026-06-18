@@ -112,6 +112,36 @@ __global__ void av_matmul_kernel(
     outBase[col] = sum;
 }
 
+__global__ void output_projection_kernel(
+    const float* __restrict__ input,
+    const float* __restrict__ weight,
+    const float* __restrict__ bias,
+    float* __restrict__ output,
+    int batch,
+    int heads,
+    int query_len,
+    int head_dim,
+    int out_dim
+) {
+    const int b = blockIdx.z;
+    const int row = blockIdx.y * blockDim.y + threadIdx.y;
+    const int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (b >= batch || row >= query_len || col >= out_dim) {
+        return;
+    }
+
+    float sum = bias != nullptr ? bias[col] : 0.0f;
+    for (int h = 0; h < heads; ++h) {
+        const float* headBase = input + (((b * heads + h) * query_len + row) * head_dim);
+        const float* weightBase = weight + (h * head_dim) * out_dim + col;
+        for (int d = 0; d < head_dim; ++d) {
+            sum += headBase[d] * weightBase[d * out_dim];
+        }
+    }
+    output[(b * query_len + row) * out_dim + col] = sum;
+}
+
 }  // namespace
 
 void launch_attention_pipeline(
@@ -142,5 +172,53 @@ void launch_attention_pipeline(
     dim3 avGrid((head_dim + kTile - 1) / kTile, (query_len + kTile - 1) / kTile, batch * heads);
     av_matmul_kernel<<<avGrid, avBlock, 0, stream>>>(
         attention, v, output, batch, heads, query_len, key_len, head_dim
+    );
+}
+
+void launch_attention_with_output_projection(
+    const float* q,
+    const float* k,
+    const float* v,
+    const float* out_weight,
+    const float* out_bias,
+    float* scores,
+    float* attention,
+    float* attention_output,
+    float* projected_output,
+    int batch,
+    int heads,
+    int query_len,
+    int key_len,
+    int head_dim,
+    int out_dim,
+    cudaStream_t stream
+) {
+    launch_attention_pipeline(
+        q,
+        k,
+        v,
+        scores,
+        attention,
+        attention_output,
+        batch,
+        heads,
+        query_len,
+        key_len,
+        head_dim,
+        stream
+    );
+
+    dim3 projBlock(kTile, kTile);
+    dim3 projGrid((out_dim + kTile - 1) / kTile, (query_len + kTile - 1) / kTile, batch);
+    output_projection_kernel<<<projGrid, projBlock, 0, stream>>>(
+        attention_output,
+        out_weight,
+        out_bias,
+        projected_output,
+        batch,
+        heads,
+        query_len,
+        head_dim,
+        out_dim
     );
 }

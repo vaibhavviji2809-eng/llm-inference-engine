@@ -1,5 +1,5 @@
 from .cache import KVCache, LayerKVCache
-from .paged import KVAllocator, KVBlock, KVPage, PagedKVCache
+from .paged import AllocatorStats, KVAllocator, KVBlock, KVPage, PagedKVCache
 
 __all__ = [
     "KVCache",
@@ -7,5 +7,6 @@ __all__ = [
     "KVAllocator",
     "KVBlock",
     "KVPage",
+    "AllocatorStats",
     "PagedKVCache",
 ]

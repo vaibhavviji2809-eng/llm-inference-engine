@@ -44,10 +44,10 @@ Implemented now:
 
 Latest additions:
 
-- numerically stable CUDA softmax and attention kernels
-- `NaiveAttention` and `FlashAttention`
-- paged KV cache abstractions
-- attention benchmark entry point
+- numerically stable CUDA softmax and attention kernels with output projection
+- `NaiveAttention` and `FlashAttention` comparison helpers
+- paged KV cache abstractions with reuse, eviction, and fragmentation metrics
+- attention benchmark entry point plus CUDA benchmark harness
 - dashboard metrics for cache hits and VRAM visibility
 
 Current machine limitation:

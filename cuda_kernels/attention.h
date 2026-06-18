@@ -16,3 +16,22 @@ void launch_attention_pipeline(
     int head_dim,
     cudaStream_t stream
 );
+
+void launch_attention_with_output_projection(
+    const float* q,
+    const float* k,
+    const float* v,
+    const float* out_weight,
+    const float* out_bias,
+    float* scores,
+    float* attention,
+    float* attention_output,
+    float* projected_output,
+    int batch,
+    int heads,
+    int query_len,
+    int key_len,
+    int head_dim,
+    int out_dim,
+    cudaStream_t stream
+);

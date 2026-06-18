@@ -32,8 +32,11 @@ Expected output table:
 
 Files:
 
+- `benchmarks/attention_benchmark.cu`
 - `cuda_kernels/softmax.cu`
 - `cuda_kernels/attention.cu`
+- `scripts/build_attention_benchmark.ps1`
+- `scripts/run_attention_benchmark.ps1`
 - `scripts/benchmark_attention.py`
 
 Expected output table:
@@ -42,6 +45,8 @@ Expected output table:
 | --- | ---: | ---: | ---: |
 | naive_attention |  |  |  |
 | flash_attention |  |  |  |
+
+The CUDA path now includes the output projection stage after `Attention Weights x V`.
 
 ## Consolidated Reporting
 

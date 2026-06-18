@@ -17,6 +17,8 @@ Paged cache path:
 
 - `kv_cache/paged.py` defines `KVPage`, `KVBlock`, `KVAllocator`, and `PagedKVCache`.
 - pages are appended in fixed-size chunks instead of one large contiguous buffer.
+- page reuse and block reuse are tracked by the allocator.
+- fragmentation metrics report page utilization, eviction counts, and allocator reuse.
 - `PagedKVCache.to_dense()` can materialize the paged structure back into the legacy `KVCache` shape.
 
 Next improvements:

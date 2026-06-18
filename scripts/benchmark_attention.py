@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 import sys
-import time
 
 import torch
 
@@ -12,27 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from transformer import FlashAttention, NaiveAttention
-
-
-def run_benchmark(
-    model: torch.nn.Module,
-    inputs: torch.Tensor,
-    repeats: int,
-) -> dict:
-    with torch.no_grad():
-        start = time.perf_counter()
-        output = None
-        for _ in range(repeats):
-            output = model(inputs)
-        elapsed = (time.perf_counter() - start) / repeats
-
-    assert output is not None
-    return {
-        "milliseconds": elapsed * 1000.0,
-        "tokens_per_second": inputs.size(0) * inputs.size(1) / elapsed,
-        "output_shape": list(output.shape),
-    }
+from transformer.flash_attention import compare_naive_and_flash_attention
 
 
 def main() -> None:
@@ -57,12 +36,12 @@ def main() -> None:
 
     torch.manual_seed(0)
     inputs = torch.randn(args.batch_size, args.seq_len, args.d_model)
-
-    naive = NaiveAttention(d_model=args.d_model, num_heads=args.heads)
-    flash = FlashAttention(d_model=args.d_model, num_heads=args.heads, block_size=args.block_size)
-
-    naive_report = run_benchmark(naive, inputs, args.repeats)
-    flash_report = run_benchmark(flash, inputs, args.repeats)
+    comparison = compare_naive_and_flash_attention(
+        inputs=inputs,
+        num_heads=args.heads,
+        block_size=args.block_size,
+        repeats=args.repeats,
+    )
 
     report = {
         "batch_size": args.batch_size,
@@ -72,20 +51,20 @@ def main() -> None:
         "block_size": args.block_size,
         "results": [
             {
-                "method": "naive_attention",
-                "milliseconds": naive_report["milliseconds"],
-                "tokens_per_second": naive_report["tokens_per_second"],
-                "estimated_memory_bytes": naive.estimate_memory_bytes(args.batch_size, args.seq_len, args.seq_len),
-                "output_shape": naive_report["output_shape"],
+                "method": comparison.naive.name,
+                "milliseconds": comparison.naive.milliseconds,
+                "tokens_per_second": comparison.naive.tokens_per_second,
+                "estimated_memory_bytes": comparison.naive.peak_memory_bytes,
             },
             {
-                "method": "flash_attention",
-                "milliseconds": flash_report["milliseconds"],
-                "tokens_per_second": flash_report["tokens_per_second"],
-                "estimated_memory_bytes": flash.estimate_memory_bytes(args.batch_size, args.seq_len, args.seq_len),
-                "output_shape": flash_report["output_shape"],
+                "method": comparison.flash.name,
+                "milliseconds": comparison.flash.milliseconds,
+                "tokens_per_second": comparison.flash.tokens_per_second,
+                "estimated_memory_bytes": comparison.flash.peak_memory_bytes,
             },
         ],
+        "speedup": comparison.speedup,
+        "memory_savings": comparison.memory_savings,
     }
 
     markdown = f"""# Attention Benchmark Report
@@ -94,6 +73,9 @@ def main() -> None:
 | --- | ---: | ---: | ---: |
 | {report["results"][0]["method"]} | {report["results"][0]["milliseconds"]:.4f} | {report["results"][0]["tokens_per_second"]:.2f} | {report["results"][0]["estimated_memory_bytes"]} |
 | {report["results"][1]["method"]} | {report["results"][1]["milliseconds"]:.4f} | {report["results"][1]["tokens_per_second"]:.2f} | {report["results"][1]["estimated_memory_bytes"]} |
+
+Speedup: `{report["speedup"]:.2f}x`
+Estimated memory savings: `{report["memory_savings"]:.2%}`
 """
 
     args.json_out.parent.mkdir(parents=True, exist_ok=True)
