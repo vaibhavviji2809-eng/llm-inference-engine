@@ -42,6 +42,14 @@ Implemented now:
 - Inference server: FastAPI endpoints for generation, streaming, chat, batching, model info, benchmarking, and dashboard metrics
 - Reporting layer: auto-generated JSON and Markdown benchmark summaries with batching metadata
 
+Latest additions:
+
+- numerically stable CUDA softmax and attention kernels
+- `NaiveAttention` and `FlashAttention`
+- paged KV cache abstractions
+- attention benchmark entry point
+- dashboard metrics for cache hits and VRAM visibility
+
 Current machine limitation:
 
 - the local environment is CPU-only, so CUDA kernels are implemented but the real GPU benchmark numbers still need to be collected on a CUDA-enabled machine with `nvcc`
@@ -204,6 +212,7 @@ curl -X POST http://127.0.0.1:8000/generate \
 - the toy tokenizer only supports characters seen in [data/tiny_corpus.txt](C:/Users/vaibh/Documents/Codex/2026-05-30/lets-do-a-huge-project/data/tiny_corpus.txt)
 - the current checkpoint is intentionally tiny and is meant for architecture experimentation, not model quality
 - CUDA benchmark numbers still need to be collected on a machine with `nvcc` and an NVIDIA runtime
+- the repository is otherwise phase-complete for the current scope
 
 ## Roadmap
 
