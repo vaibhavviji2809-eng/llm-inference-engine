@@ -69,7 +69,7 @@ def render_dashboard() -> HTMLResponse:
     }
     .row {
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: 2fr 1fr 1fr;
       gap: 16px;
     }
     table {
@@ -107,6 +107,10 @@ def render_dashboard() -> HTMLResponse:
       <div class="panel"><div class="label">Benchmarks</div><div class="value" id="benchmarkCount">-</div></div>
       <div class="panel"><div class="label">Batch Runs</div><div class="value" id="batchRunCount">-</div></div>
       <div class="panel"><div class="label">Avg Tokens/Sec</div><div class="value" id="avgTps">-</div></div>
+      <div class="panel"><div class="label">Avg Batch Size</div><div class="value" id="avgBatchSize">-</div></div>
+      <div class="panel"><div class="label">Batch Speedup</div><div class="value" id="avgBatchSpeedup">-</div></div>
+      <div class="panel"><div class="label">Cache Hit Rate</div><div class="value" id="avgCacheHitRate">-</div></div>
+      <div class="panel"><div class="label">VRAM (MB)</div><div class="value" id="avgVram">-</div></div>
     </div>
     <div class="row">
       <div class="panel">
@@ -119,7 +123,14 @@ def render_dashboard() -> HTMLResponse:
       <div class="panel">
         <div class="label">Recent Batch Runs</div>
         <table id="batchTable">
-          <thead><tr><th>Requests</th><th>Steps</th><th>TPS</th></tr></thead>
+          <thead><tr><th>Requests</th><th>Steps</th><th>TPS</th><th>Batch Size</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="panel">
+        <div class="label">Recent Benchmarks</div>
+        <table id="benchmarksTable">
+          <thead><tr><th>Prompt</th><th>Speedup</th><th>TPS</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
@@ -133,6 +144,10 @@ def render_dashboard() -> HTMLResponse:
       document.getElementById('benchmarkCount').textContent = data.benchmark_count;
       document.getElementById('batchRunCount').textContent = data.batch_run_count;
       document.getElementById('avgTps').textContent = data.avg_tokens_per_second ? data.avg_tokens_per_second.toFixed(1) : '-';
+      document.getElementById('avgBatchSize').textContent = data.avg_batch_size ? data.avg_batch_size.toFixed(2) : '-';
+      document.getElementById('avgBatchSpeedup').textContent = data.avg_batch_speedup ? data.avg_batch_speedup.toFixed(2) + 'x' : '-';
+      document.getElementById('avgCacheHitRate').textContent = data.avg_cache_hit_rate ? (data.avg_cache_hit_rate * 100).toFixed(1) + '%' : '-';
+      document.getElementById('avgVram').textContent = data.avg_vram_allocated_mb ? data.avg_vram_allocated_mb.toFixed(1) : '-';
 
       const requestsBody = document.querySelector('#requestsTable tbody');
       requestsBody.innerHTML = '';
@@ -146,7 +161,16 @@ def render_dashboard() -> HTMLResponse:
       batchBody.innerHTML = '';
       for (const row of data.recent_batch_runs.slice().reverse()) {
         batchBody.insertAdjacentHTML('beforeend',
-          `<tr><td>${row.request_count}</td><td>${row.steps}</td><td>${row.tokens_per_second?.toFixed?.(1) ?? '-'}</td></tr>`
+          `<tr><td>${row.request_count}</td><td>${row.steps}</td><td>${row.tokens_per_second?.toFixed?.(1) ?? '-'}</td><td>${row.avg_batch_size?.toFixed?.(2) ?? '-'}</td></tr>`
+        );
+      }
+
+      const benchmarksBody = document.querySelector('#benchmarksTable tbody');
+      benchmarksBody.innerHTML = '';
+      for (const row of data.recent_benchmarks.slice().reverse()) {
+        const batched = row.results?.[1];
+        benchmarksBody.insertAdjacentHTML('beforeend',
+          `<tr><td><code>${(row.prompt || '').slice(0, 20)}</code></td><td>${batched?.speedup_vs_serial ? batched.speedup_vs_serial.toFixed(2) + 'x' : '-'}</td><td>${batched?.tokens_per_second?.toFixed?.(1) ?? '-'}</td></tr>`
         );
       }
     }

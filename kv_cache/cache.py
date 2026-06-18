@@ -40,3 +40,14 @@ class KVCache:
         if first_layer is None:
             return 0
         return int(first_layer.keys.size(2))
+
+    def clone(self) -> "KVCache":
+        cloned = KVCache(num_layers=len(self.layers))
+        for index, layer in enumerate(self.layers):
+            if layer is None:
+                continue
+            cloned.layers[index] = LayerKVCache(
+                keys=layer.keys.clone(),
+                values=layer.values.clone(),
+            )
+        return cloned

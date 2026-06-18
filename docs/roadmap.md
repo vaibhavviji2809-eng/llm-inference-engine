@@ -37,57 +37,59 @@ Note:
 - INT8 weight-only quantization path
 - memory, throughput, and loss comparison script
 
-## Next Up
-
 ### Phase 5: Continuous Batching
 
-Build a scheduler that:
-
-- groups active decode requests
-- advances them in a shared pass
-- measures throughput gains versus serial handling
+- grouped decode requests
+- shared-pass scheduling
+- throughput comparison against serial handling
 
 ### Phase 6: Inference Server Expansion
-
-Improve serving with:
 
 - request queueing
 - streaming responses
 - cache-aware request handling
 - server-side benchmark reporting
 
-### Phase 7: Memory Optimizations
+### Phase 7A: CUDA Softmax
 
-Implement simplified versions of:
+- numerically stable row-wise softmax kernel
+- row max / row sum helpers
+- shared-memory and warp-reduction structure
 
-- paged attention
-- flash-style attention
+### Phase 7B: CUDA Attention
 
-### Phase 8: Profiling Dashboard
+- explicit QK^T kernel
+- softmax normalization kernel
+- AV kernel
+- attention pipeline launcher
 
-Track:
+### Phase 8: FlashAttention
 
+- `NaiveAttention`
+- `FlashAttention`
+- blockwise softmax accumulation without materializing an NxN matrix
+
+### Phase 9: PagedAttention
+
+- `KVPage`
+- `KVBlock`
+- `KVAllocator`
+- `PagedKVCache`
+
+### Phase 10: Real GPU Benchmarks
+
+- attention benchmark script surface
+- CUDA kernel benchmark surface
+- consolidated JSON and Markdown reporting
+
+### Phase 11: Production Dashboard
+
+- tokens/sec
+- batch size
 - latency
-- throughput
-- memory usage
-- tokens per second
-- benchmark comparisons
+- cache hit rate
+- VRAM usage when available
 
-### Phase 9: External Comparisons
+## Next Up
 
-Benchmark against:
-
-- PyTorch
-- ONNX Runtime
-- TensorRT
-- vLLM
-
-### Phase 10: Technical Writing
-
-Turn the build process into a series of short, concrete blog posts:
-
-1. Building a Transformer From Scratch
-2. Writing CUDA Kernels
-3. KV Cache Optimization
-4. Quantization Tradeoffs
-5. Inference Engine Architecture
+The implementation phases are complete. The only remaining work is to capture real CUDA benchmark numbers on a GPU machine and fold those measurements into the report.

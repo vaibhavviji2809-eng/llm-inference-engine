@@ -11,6 +11,9 @@ class TransformerConfig:
     d_ff: int = 256
     dropout: float = 0.0
     eps: float = 1e-5
+    attention_backend: str = "naive"
+    flash_block_size: int = 64
+    page_size: int = 16
 
     @property
     def head_dim(self) -> int:

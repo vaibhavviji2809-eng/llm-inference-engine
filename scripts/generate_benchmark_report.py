@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import platform
 import sys
+import time
 from typing import Any
 
 import torch
@@ -21,7 +22,7 @@ from quantization import (
 from scripts.generate import normalize_config
 from server.app.runtime import TransformerRuntime
 from tokenizer import CharTokenizer
-from transformer import DecoderOnlyTransformer, TransformerConfig
+from transformer import DecoderOnlyTransformer, FlashAttention, NaiveAttention, TransformerConfig
 from transformer.modules import softmax
 
 
@@ -121,10 +122,55 @@ def collect_quantization_report(
     }
 
 
+def collect_attention_report(
+    batch_size: int,
+    seq_len: int,
+    d_model: int,
+    heads: int,
+    block_size: int,
+    repeats: int,
+) -> dict[str, Any]:
+    inputs = torch.randn(batch_size, seq_len, d_model)
+    variants = [
+        ("naive_attention", NaiveAttention(d_model=d_model, num_heads=heads)),
+        ("flash_attention", FlashAttention(d_model=d_model, num_heads=heads, block_size=block_size)),
+    ]
+
+    results: list[dict[str, Any]] = []
+    for label, model in variants:
+        with torch.no_grad():
+            start = time.perf_counter()
+            output = None
+            for _ in range(repeats):
+                output = model(inputs)
+            elapsed = (time.perf_counter() - start) / repeats
+        assert output is not None
+        results.append(
+            {
+                "method": label,
+                "milliseconds": elapsed * 1000.0,
+                "tokens_per_second": batch_size * seq_len / elapsed,
+                "estimated_memory_bytes": model.estimate_memory_bytes(batch_size, seq_len, seq_len),
+                "output_shape": list(output.shape),
+            }
+        )
+
+    return {
+        "batch_size": batch_size,
+        "seq_len": seq_len,
+        "d_model": d_model,
+        "heads": heads,
+        "block_size": block_size,
+        "results": results,
+    }
+
+
 def render_markdown(report: dict[str, Any]) -> str:
     kv_rows = report["kv_cache"]["results"]
     batch_rows = report["batching"]["results"]
     quant_rows = report["quantization"]["results"]
+    attention_rows = report["attention"]["results"]
+    batching = report["batching"]
     return f"""# Benchmark Report
 
 Generated automatically for the current local environment.
@@ -150,6 +196,14 @@ Generated automatically for the current local environment.
 | {batch_rows[0]["method"]} | {batch_rows[0]["seconds"]:.6f} | {batch_rows[0]["tokens_per_second"]:.2f} |
 | {batch_rows[1]["method"]} | {batch_rows[1]["seconds"]:.6f} | {batch_rows[1]["tokens_per_second"]:.2f} |
 
+Batching metadata:
+
+- prompts: `{len(batching["prompts"])}`
+- avg batch size: `{batch_rows[1]["avg_batch_size"]:.2f}`
+- max batch size: `{batch_rows[1]["max_batch_size"]}`
+- cache rebuilds: `{batch_rows[1]["cache_rebuilds"]}`
+- speedup vs serial: `{batch_rows[1]["speedup_vs_serial"]:.2f}x`
+
 ## Quantization
 
 | Type | Memory (MiB) | Seconds | Tokens/sec | Loss | Loss Delta |
@@ -157,6 +211,13 @@ Generated automatically for the current local environment.
 | {quant_rows[0]["type"]} | {quant_rows[0]["memory_mib"]:.4f} | {quant_rows[0]["seconds"]:.6f} | {quant_rows[0]["tokens_per_second"]:.2f} | {quant_rows[0]["loss"]:.4f} | {quant_rows[0]["loss_delta"]:.4f} |
 | {quant_rows[1]["type"]} | {quant_rows[1]["memory_mib"]:.4f} | {quant_rows[1]["seconds"]:.6f} | {quant_rows[1]["tokens_per_second"]:.2f} | {quant_rows[1]["loss"]:.4f} | {quant_rows[1]["loss_delta"]:.4f} |
 | {quant_rows[2]["type"]} | {quant_rows[2]["memory_mib"]:.4f} | {quant_rows[2]["seconds"]:.6f} | {quant_rows[2]["tokens_per_second"]:.2f} | {quant_rows[2]["loss"]:.4f} | {quant_rows[2]["loss_delta"]:.4f} |
+
+## Attention
+
+| Method | Milliseconds | Tokens/sec | Estimated Memory (bytes) |
+| --- | ---: | ---: | ---: |
+| {attention_rows[0]["method"]} | {attention_rows[0]["milliseconds"]:.4f} | {attention_rows[0]["tokens_per_second"]:.2f} | {attention_rows[0]["estimated_memory_bytes"]} |
+| {attention_rows[1]["method"]} | {attention_rows[1]["milliseconds"]:.4f} | {attention_rows[1]["tokens_per_second"]:.2f} | {attention_rows[1]["estimated_memory_bytes"]} |
 
 ## Notes
 
@@ -182,6 +243,12 @@ def main() -> None:
         default=["Hello", "Hello how", "Hello there", "Hello how are"],
     )
     parser.add_argument("--seq-len", type=int, default=16)
+    parser.add_argument("--attention-batch-size", type=int, default=2)
+    parser.add_argument("--attention-seq-len", type=int, default=64)
+    parser.add_argument("--attention-d-model", type=int, default=64)
+    parser.add_argument("--attention-heads", type=int, default=4)
+    parser.add_argument("--attention-block-size", type=int, default=32)
+    parser.add_argument("--attention-repeats", type=int, default=10)
     parser.add_argument(
         "--json-out",
         type=Path,
@@ -218,6 +285,14 @@ def main() -> None:
             sample_tokens=args.sample_tokens,
             repeats=args.repeats,
             seq_len=args.seq_len,
+        ),
+        "attention": collect_attention_report(
+            batch_size=args.attention_batch_size,
+            seq_len=args.attention_seq_len,
+            d_model=args.attention_d_model,
+            heads=args.attention_heads,
+            block_size=args.attention_block_size,
+            repeats=args.attention_repeats,
         ),
     }
 

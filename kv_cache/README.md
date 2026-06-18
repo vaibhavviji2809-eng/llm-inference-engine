@@ -13,8 +13,15 @@ Current behavior:
 3. Reuse cached history for attention instead of recomputing prior tokens.
 4. If the active sequence exceeds `max_seq_len`, rebuild the cache from the newest window.
 
+Paged cache path:
+
+- `kv_cache/paged.py` defines `KVPage`, `KVBlock`, `KVAllocator`, and `PagedKVCache`.
+- pages are appended in fixed-size chunks instead of one large contiguous buffer.
+- `PagedKVCache.to_dense()` can materialize the paged structure back into the legacy `KVCache` shape.
+
 Next improvements:
 
 - expose cache stats in the server layer
 - batch multiple cached decode streams together
 - combine with quantized weights and CUDA kernels
+- tune the paged allocator after real GPU runs

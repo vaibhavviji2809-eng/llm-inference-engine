@@ -11,11 +11,15 @@ Current panels:
 - benchmark count
 - batch-run count
 - average tokens/sec
+- average cache hit rate
+- average VRAM usage when available
 - recent request table
 - recent batching table
+- recent benchmark table showing serial-vs-batched speedup
 
 Next improvements:
 
 - add benchmark charts
 - add GPU metrics when running on a CUDA-enabled machine
 - persist metrics over longer sessions
+- add attention benchmark history and flash-vs-naive comparisons once GPU numbers are captured

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from statistics import mean
 import time
 
 import torch
@@ -62,7 +63,7 @@ class ContinuousBatcher:
                 )
         return caches
 
-    def _prefill_group(self, items: list[dict]) -> None:
+    def _prefill_group(self, items: list[dict]) -> int:
         prompt_batch = torch.cat([item["generated"] for item in items], dim=0)
         batch_cache = KVCache(num_layers=len(self.model.blocks))
         logits = self.model.forward_incremental(prompt_batch, batch_cache, position_offset=0)
@@ -74,8 +75,9 @@ class ContinuousBatcher:
             item["generated"] = torch.cat([item["generated"], next_tokens[index]], dim=1)
             item["remaining_tokens"] -= 1
             item["last_token"] = next_tokens[index]
+        return len(items)
 
-    def _decode_group(self, items: list[dict]) -> None:
+    def _decode_group(self, items: list[dict]) -> int:
         token_batch = torch.cat([item["last_token"] for item in items], dim=0)
         batch_cache = self._stack_caches([item["cache"] for item in items])
         position_offset = batch_cache.sequence_length()
@@ -88,6 +90,7 @@ class ContinuousBatcher:
             item["generated"] = torch.cat([item["generated"], next_tokens[index]], dim=1)
             item["remaining_tokens"] -= 1
             item["last_token"] = next_tokens[index]
+        return len(items)
 
     def generate(self, requests: list[BatchGenerateRequest]) -> dict:
         if not requests:
@@ -95,9 +98,17 @@ class ContinuousBatcher:
                 "request_count": 0,
                 "steps": 0,
                 "latency_seconds": 0.0,
-                "tokens_per_second": 0.0,
-                "results": [],
-            }
+            "tokens_per_second": 0.0,
+            "avg_batch_size": 0.0,
+            "max_batch_size": 0,
+            "cache_rebuilds": 0,
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "cache_hit_rate": 0.0,
+            "prefill_groups": 0,
+            "decode_groups": 0,
+            "results": [],
+        }
 
         active = [
             {
@@ -114,21 +125,29 @@ class ContinuousBatcher:
 
         steps = 0
         emitted_tokens = 0
+        cache_rebuilds = 0
+        cache_hits = 0
+        cache_misses = 0
+        batch_sizes: list[int] = []
+        prefill_group_count = 0
+        decode_group_count = 0
         start = time.perf_counter()
 
-        prefill_groups: dict[int, list[dict]] = {}
+        prefill_groups_map: dict[int, list[dict]] = {}
         for item in active:
             if item["remaining_tokens"] <= 0:
                 continue
-            prefill_groups.setdefault(item["prompt_length"], []).append(item)
+            prefill_groups_map.setdefault(item["prompt_length"], []).append(item)
 
-        for items in prefill_groups.values():
-            self._prefill_group(items)
+        for items in prefill_groups_map.values():
+            cache_misses += self._prefill_group(items)
             emitted_tokens += len(items)
             steps += 1
+            batch_sizes.append(len(items))
+            prefill_group_count += 1
 
         while any(item["remaining_tokens"] > 0 for item in active):
-            decode_groups: dict[int, list[dict]] = {}
+            decode_groups_map: dict[int, list[dict]] = {}
             for item in active:
                 if item["remaining_tokens"] <= 0:
                     continue
@@ -137,17 +156,23 @@ class ContinuousBatcher:
                     window = item["generated"][:, -self.model.config.max_seq_len :]
                     item["cache"] = KVCache(num_layers=len(self.model.blocks))
                     logits = self.model.forward_incremental(window, item["cache"], position_offset=0)
+                    cache_rebuilds += 1
+                    cache_misses += 1
                     next_token = self._sample_next_token(logits, [item["temperature"]])[0]
                     item["generated"] = torch.cat([item["generated"], next_token], dim=1)
                     item["remaining_tokens"] -= 1
                     item["last_token"] = next_token
                     emitted_tokens += 1
                     steps += 1
+                    batch_sizes.append(1)
                 else:
-                    decode_groups.setdefault(cache_len, []).append(item)
+                    decode_groups_map.setdefault(cache_len, []).append(item)
 
-            for items in decode_groups.values():
-                self._decode_group(items)
+            for items in decode_groups_map.values():
+                emitted = self._decode_group(items)
+                cache_hits += emitted
+                decode_group_count += 1
+                batch_sizes.append(emitted)
                 emitted_tokens += len(items)
                 steps += 1
 
@@ -158,6 +183,14 @@ class ContinuousBatcher:
             "latency_seconds": elapsed,
             "tokens_per_second": emitted_tokens / elapsed if elapsed > 0 else 0.0,
             "mode": "batched_kv_cache",
+            "avg_batch_size": mean(batch_sizes) if batch_sizes else 0.0,
+            "max_batch_size": max(batch_sizes) if batch_sizes else 0,
+            "cache_rebuilds": cache_rebuilds,
+            "cache_hits": cache_hits,
+            "cache_misses": cache_misses,
+            "cache_hit_rate": cache_hits / emitted_tokens if emitted_tokens > 0 else 0.0,
+            "prefill_groups": prefill_group_count,
+            "decode_groups": decode_group_count,
             "results": [
                 {
                     "request_id": item["request_id"],

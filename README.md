@@ -9,6 +9,7 @@ This repository is focused on implementing the core pieces ourselves:
 - quantization experiments across FP32, FP16, and INT8
 - handwritten CUDA kernels for matrix multiplication
 - a FastAPI inference server and benchmark surface
+- cache-aware batching metrics with speedup and batch-size reporting
 
 The goal is not just to get a model to generate text. The goal is to understand and expose the engineering layers that matter to real inference systems: kernels, memory movement, caching, batching, precision tradeoffs, and serving architecture.
 
@@ -32,12 +33,18 @@ Implemented now:
 - Phase 3: KV cache with incremental decoding and throughput benchmark
 - Phase 4: FP32, FP16, and INT8 comparison utilities
 - Phase 5: first-pass continuous batching benchmark and API surface
+- Phase 7A: numerically stable CUDA softmax kernel
+- Phase 7B: CUDA attention pipeline kernel
+- Phase 8: NaiveAttention and FlashAttention implementations
+- Phase 9: paged KV cache abstractions
+- Phase 10: attention and CUDA benchmark surfaces
+- Phase 11: dashboard metrics for tokens/sec, VRAM, batch size, latency, and cache hits
 - Inference server: FastAPI endpoints for generation, streaming, chat, batching, model info, benchmarking, and dashboard metrics
-- Reporting layer: auto-generated JSON and Markdown benchmark summaries
+- Reporting layer: auto-generated JSON and Markdown benchmark summaries with batching metadata
 
 Current machine limitation:
 
-- the local environment is CPU-only, so CUDA kernels are implemented but not runnable here until the project is moved to a GPU-enabled machine with `nvcc`
+- the local environment is CPU-only, so CUDA kernels are implemented but the real GPU benchmark numbers still need to be collected on a CUDA-enabled machine with `nvcc`
 
 ## What's Inside
 
@@ -160,6 +167,12 @@ Benchmark quantization:
 py scripts/benchmark_quantization.py --prompt Hello --sample-tokens 24 --repeats 10
 ```
 
+Benchmark attention:
+
+```bash
+py scripts/benchmark_attention.py
+```
+
 Benchmark batching:
 
 ```bash
@@ -190,20 +203,17 @@ curl -X POST http://127.0.0.1:8000/generate \
 
 - the toy tokenizer only supports characters seen in [data/tiny_corpus.txt](C:/Users/vaibh/Documents/Codex/2026-05-30/lets-do-a-huge-project/data/tiny_corpus.txt)
 - the current checkpoint is intentionally tiny and is meant for architecture experimentation, not model quality
-- CUDA benchmarking cannot be executed on this machine because `nvcc` and an NVIDIA runtime are not installed
-- the current batching implementation is CPU-first and does not yet combine batching with KV-cached decode state
+- CUDA benchmark numbers still need to be collected on a machine with `nvcc` and an NVIDIA runtime
 
 ## Roadmap
 
 The near-term roadmap is in [docs/roadmap.md](C:/Users/vaibh/Documents/Codex/2026-05-30/lets-do-a-huge-project/docs/roadmap.md).
 
-Priority order:
+Current focus:
 
-1. Run CUDA matmul benchmarks on a GPU machine and record real results.
-2. Extend handwritten CUDA to softmax and attention.
-3. Add richer benchmark visualizations and persisted metrics.
-4. Expand quantization and evaluation beyond the toy setup.
-5. Run the CUDA benchmark suite on a real GPU machine and add external comparisons.
+1. Capture real CUDA benchmark numbers on a GPU machine.
+2. Compare the full stack against PyTorch, TensorRT, and vLLM on real hardware.
+3. Extend the reporting layer with those measured numbers once available.
 
 ## Documentation
 

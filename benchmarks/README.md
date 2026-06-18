@@ -6,6 +6,7 @@ Track these comparisons over time:
 | --- | --- | --- |
 | CPU matmul | Python or NumPy | naive CUDA |
 | naive CUDA | global-memory only | tiled CUDA |
+| attention | naive NxN attention | FlashAttention |
 | decode throughput | no KV cache | KV cache |
 | precision | FP32 | FP16 / INT8 |
 | serving | serial requests | continuous batching |
@@ -27,6 +28,21 @@ Expected output table:
 | Naive CUDA |  |  |  |
 | Tiled CUDA |  |  |  |
 
+## Attention Benchmark
+
+Files:
+
+- `cuda_kernels/softmax.cu`
+- `cuda_kernels/attention.cu`
+- `scripts/benchmark_attention.py`
+
+Expected output table:
+
+| Method | Milliseconds | Tokens/sec | Estimated Memory (bytes) |
+| --- | ---: | ---: | ---: |
+| naive_attention |  |  |  |
+| flash_attention |  |  |  |
+
 ## Consolidated Reporting
 
 Generate a single JSON and Markdown benchmark report with:
@@ -39,3 +55,5 @@ Artifacts:
 
 - `benchmarks/results/latest_report.json`
 - `benchmarks/results/latest_report.md`
+
+The consolidated batching section includes cache-aware metadata such as average batch size, cache rebuilds, and serial-vs-batched speedup.

@@ -45,10 +45,17 @@ app = FastAPI(title="LLM Inference Engine")
 @app.get("/health")
 def health() -> dict:
     checkpoint_exists = DEFAULT_CHECKPOINT.exists()
+    device_stats = get_runtime().device_stats() if checkpoint_exists else {
+        "gpu_available": False,
+        "gpu_name": None,
+        "vram_allocated_mb": None,
+        "vram_reserved_mb": None,
+    }
     return {
         "status": "ok",
         "checkpoint_exists": checkpoint_exists,
         "runtime_ready": checkpoint_exists,
+        **device_stats,
     }
 
 

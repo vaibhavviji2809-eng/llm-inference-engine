@@ -48,10 +48,27 @@ class TransformerRuntime:
         self.device = "cpu"
         self.batcher = ContinuousBatcher(self.model)
 
+    def device_stats(self) -> dict:
+        if torch.cuda.is_available():
+            torch.cuda.set_device(0)
+            return {
+                "gpu_available": True,
+                "gpu_name": torch.cuda.get_device_name(0),
+                "vram_allocated_mb": torch.cuda.memory_allocated(0) / (1024 * 1024),
+                "vram_reserved_mb": torch.cuda.memory_reserved(0) / (1024 * 1024),
+            }
+        return {
+            "gpu_available": False,
+            "gpu_name": None,
+            "vram_allocated_mb": None,
+            "vram_reserved_mb": None,
+        }
+
     def model_card(self) -> dict:
         return {
             "checkpoint": str(self.checkpoint_path),
             "device": self.device,
+            **self.device_stats(),
             "config": asdict(self.config),
             "summary": self.model.summary(),
         }
@@ -99,6 +116,10 @@ class TransformerRuntime:
             "use_kv_cache": use_cache,
             "latency_seconds": elapsed,
             "tokens_per_second": max_new_tokens / elapsed if elapsed > 0 else None,
+            "cache_hits": max_new_tokens if use_cache else 0,
+            "cache_misses": 0 if use_cache else max_new_tokens,
+            "cache_hit_rate": 1.0 if use_cache else 0.0,
+            **self.device_stats(),
         }
 
     def stream_text(
@@ -166,12 +187,20 @@ class TransformerRuntime:
                     "seconds": uncached_seconds,
                     "tokens_per_second": max_new_tokens / uncached_seconds,
                     "sample": self.decode_tokens(uncached_output),
+                    "cache_hits": 0,
+                    "cache_misses": max_new_tokens,
+                    "cache_hit_rate": 0.0,
+                    **self.device_stats(),
                 },
                 {
                     "method": "kv_cache",
                     "seconds": cached_seconds,
                     "tokens_per_second": max_new_tokens / cached_seconds,
                     "sample": self.decode_tokens(cached_output),
+                    "cache_hits": max_new_tokens,
+                    "cache_misses": 0,
+                    "cache_hit_rate": 1.0,
+                    **self.device_stats(),
                 },
             ],
         }
@@ -197,6 +226,15 @@ class TransformerRuntime:
             "steps": report["steps"],
             "latency_seconds": report["latency_seconds"],
             "tokens_per_second": report["tokens_per_second"],
+            "avg_batch_size": report["avg_batch_size"],
+            "max_batch_size": report["max_batch_size"],
+            "cache_rebuilds": report["cache_rebuilds"],
+            "prefill_groups": report["prefill_groups"],
+            "decode_groups": report["decode_groups"],
+            "cache_hits": report["cache_hits"],
+            "cache_misses": report["cache_misses"],
+            "cache_hit_rate": report["cache_hit_rate"],
+            **self.device_stats(),
             "results": [
                 {
                     "request_id": result["request_id"],
@@ -255,11 +293,25 @@ class TransformerRuntime:
                     "seconds": serial_elapsed,
                     "tokens_per_second": total_tokens / serial_elapsed,
                     "samples": [self.decode_tokens(output) for output in serial_outputs],
+                    "avg_batch_size": 1.0,
+                    "cache_hits": total_tokens,
+                    "cache_misses": 0,
+                    "cache_hit_rate": 1.0,
+                    "speedup_vs_batched": None,
                 },
                 {
                     "method": batched_report["mode"],
                     "seconds": batched_elapsed,
                     "tokens_per_second": total_tokens / batched_elapsed,
+                    "speedup_vs_serial": serial_elapsed / batched_elapsed,
+                    "avg_batch_size": batched_report["avg_batch_size"],
+                    "max_batch_size": batched_report["max_batch_size"],
+                    "cache_rebuilds": batched_report["cache_rebuilds"],
+                    "prefill_groups": batched_report["prefill_groups"],
+                    "decode_groups": batched_report["decode_groups"],
+                    "cache_hits": batched_report["cache_hits"],
+                    "cache_misses": batched_report["cache_misses"],
+                    "cache_hit_rate": batched_report["cache_hit_rate"],
                     "steps": batched_report["steps"],
                     "samples": [
                         self.decode_tokens(result["generated"])

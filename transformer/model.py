@@ -9,6 +9,7 @@ from torch import nn
 from kv_cache import KVCache, LayerKVCache
 from .config import TransformerConfig
 from .modules import LayerNorm, Linear, PositionalEmbedding, TokenEmbedding, gelu, softmax
+from .attention import FlashAttention, NaiveAttention
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -96,7 +97,17 @@ class TransformerBlock(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
         self.ln1 = LayerNorm(config.d_model, eps=config.eps)
-        self.attn = MultiHeadSelfAttention(config)
+        if config.attention_backend == "flash":
+            self.attn = FlashAttention(
+                d_model=config.d_model,
+                num_heads=config.num_heads,
+                block_size=config.flash_block_size,
+            )
+        else:
+            self.attn = NaiveAttention(
+                d_model=config.d_model,
+                num_heads=config.num_heads,
+            )
         self.ln2 = LayerNorm(config.d_model, eps=config.eps)
         self.ffn = FeedForward(config)
 

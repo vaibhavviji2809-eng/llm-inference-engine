@@ -39,9 +39,21 @@ def main() -> None:
     print("Continuous batching benchmark")
     print(f"prompts={len(args.prompts)} sample_tokens={args.sample_tokens} repeats={args.repeats}")
     print("")
-    print(f"{'Method':<24}{'Seconds':<14}{'Tokens/sec':<14}")
-    print(f"{'Serial KV cache':<24}{serial['seconds']:<14.6f}{serial['tokens_per_second']:<14.2f}")
-    print(f"{'Batched KV cache':<24}{batched['seconds']:<14.6f}{batched['tokens_per_second']:<14.2f}")
+    print(f"{'Method':<24}{'Seconds':<14}{'Tokens/sec':<14}{'Batch Size':<14}")
+    print(
+        f"{'Serial KV cache':<24}{serial['seconds']:<14.6f}{serial['tokens_per_second']:<14.2f}"
+        f"{serial['avg_batch_size']:<14.2f}"
+    )
+    print(
+        f"{'Batched KV cache':<24}{batched['seconds']:<14.6f}{batched['tokens_per_second']:<14.2f}"
+        f"{batched['avg_batch_size']:<14.2f}"
+    )
+    print("")
+    print(f"speedup_vs_serial={batched['speedup_vs_serial']:.2f}x")
+    print(f"cache_hit_rate={batched['cache_hit_rate']:.2%}")
+    print(f"cache_rebuilds={batched['cache_rebuilds']}")
+    print(f"prefill_groups={batched['prefill_groups']}")
+    print(f"decode_groups={batched['decode_groups']}")
     print("")
     print("serial samples:")
     for output in serial["samples"]:
